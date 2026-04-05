@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Banknote, Loader2, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { usePayout } from '@/hooks/use-wallets';
+import { usePayout, useWallets } from '@/hooks/use-wallets';
 import type { PayoutMethod, PayoutResponse } from '@/lib/api/contracts';
 import {
   Select,
@@ -24,8 +24,6 @@ import { Label } from '@/components/ui/label';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const CURRENCIES = ['EUR', 'USDT'] as const;
-
 const METHODS: { value: PayoutMethod; label: string; description: string }[] = [
   { value: 'IBAN', label: 'IBAN', description: 'Transferência SEPA' },
   { value: 'SEPA', label: 'SEPA', description: 'Crédito SEPA' },
@@ -33,6 +31,14 @@ const METHODS: { value: PayoutMethod; label: string; description: string }[] = [
   { value: 'CRYPTO', label: 'Crypto', description: 'Blockchain' },
   { value: 'BANK', label: 'Bank Transfer', description: 'Transferência bancária' },
 ];
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  EUR: '€',
+  USDT: '₮',
+  GBP: '£',
+  USD: '$',
+  BRL: 'R$',
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -80,8 +86,21 @@ function getMethodDescription(method: PayoutMethod): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function PayoutWidget() {
+  const { data: wallets } = useWallets();
+
+  // Extract unique currency codes from user's wallets (dynamic, no mock data)
+  const availableCurrencies = useMemo(() => {
+    if (!wallets || wallets.length === 0) return [];
+    const set = new Set<string>();
+    for (const w of wallets) {
+      if (w.currency_code) set.add(w.currency_code);
+    }
+    return Array.from(set).sort();
+  }, [wallets]);
+
   const [amount, setAmount] = useState<string>('');
-  const [currency, setCurrency] = useState<string>('EUR');
+  // null = not yet manually selected → derive from available currencies
+  const [userCurrency, setUserCurrency] = useState<string | null>(null);
   const [method, setMethod] = useState<PayoutMethod>('IBAN');
   const [destination, setDestination] = useState<string>('');
 
@@ -91,9 +110,11 @@ export default function PayoutWidget() {
   const payoutMutation = usePayout();
   const isPending = payoutMutation.isPending;
 
+  // Derive effective currency: manual override or first from wallets
+  const currency = userCurrency ?? (availableCurrencies[0] ?? '');
+
   const currencySymbol = useMemo(() => {
-    const symbols: Record<string, string> = { EUR: '€', USDT: '₮' };
-    return symbols[currency] ?? '';
+    return CURRENCY_SYMBOLS[currency] ?? '';
   }, [currency]);
 
   const numAmount = parseFloat(amount) || 0;
@@ -164,6 +185,24 @@ export default function PayoutWidget() {
     setDialogOpen(false);
   }, [isPending]);
 
+  // No wallets loaded yet
+  if (!wallets) {
+    return (
+      <div className="cyber-panel p-5">
+        <div className="flex items-center gap-2 mb-5">
+          <Banknote className="w-4 h-4 text-[#BF40FF]" />
+          <h3 className="text-sm font-semibold text-[#E0E0E8]">Levantamento</h3>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-5 h-5 text-[#BF40FF] animate-spin" />
+          <span className="ml-3 text-xs cyber-mono text-[#555566]">
+            A CARREGAR CARTEIRAS...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="cyber-panel p-5">
@@ -195,15 +234,15 @@ export default function PayoutWidget() {
               </div>
             </div>
 
-            {/* Currency */}
+            {/* Currency — dynamic from wallets */}
             <div className="space-y-1.5">
               <Label className="text-xs text-[#888899]">Moeda</Label>
-              <Select value={currency} onValueChange={setCurrency}>
+              <Select value={currency} onValueChange={setUserCurrency}>
                 <SelectTrigger className="cyber-input w-full rounded-md px-3 py-2 text-sm text-[#E0E0E8]">
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
-                  {CURRENCIES.map((cur) => (
+                  {availableCurrencies.map((cur) => (
                     <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
                       {cur}
                     </SelectItem>
@@ -245,7 +284,7 @@ export default function PayoutWidget() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isPending || !formIsValid}
+            disabled={isPending || !formIsValid || !currency}
             className="cyber-btn-primary w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isPending ? (

@@ -190,15 +190,17 @@ export const actionTickets = {
 // ─── 8. SETTINGS ─────────────────────────────────────────────────────────
 
 export const settings = {
+  /** POST /users/me/password */
   async changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-    return request('/settings/password', {
-      method: 'PATCH',
+    return request('/users/me/password', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
+  /** PATCH /users/me — email update (convenience wrapper) */
   async updateEmail(data: UpdateEmailRequest): Promise<UpdateEmailResponse> {
-    return request('/settings/email', {
+    return request('/users/me', {
       method: 'PATCH',
       body: JSON.stringify(data),
     });

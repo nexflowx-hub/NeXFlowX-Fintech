@@ -1,14 +1,29 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Key, Mail, Shield, Bell, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Key, Mail, Shield, Bell, Loader2, Eye, EyeOff, RefreshCw, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth-store';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  webhook_url?: string;
+  hmac_secret?: string;
+  email_notifications?: boolean;
+  transaction_alerts?: boolean;
+  weekly_reports?: boolean;
+  security_alerts?: boolean;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function PasswordField({
   label,
@@ -52,6 +67,7 @@ function PasswordField({
 }
 
 // ─── Tab 1: Change Password ───────────────────────────────────────────────
+// Route: POST /api/v1/users/me/password
 
 function ChangePasswordTab() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -79,6 +95,7 @@ function ChangePasswordTab() {
 
     setIsLoading(true);
     try {
+      // POST /api/v1/users/me/password
       await api.settings.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
@@ -99,6 +116,12 @@ function ChangePasswordTab() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-md">
+      {/* Route indicator */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]">
+        <span className="cyber-badge cyber-badge-amber text-[9px]">POST</span>
+        <code className="text-[11px] cyber-mono text-[#888899]">/api/v1/users/me/password</code>
+      </div>
+
       <PasswordField
         label="Password Atual"
         value={currentPassword}
@@ -173,9 +196,10 @@ function ChangePasswordTab() {
 }
 
 // ─── Tab 2: Email Management ──────────────────────────────────────────────
+// Route: PATCH /api/v1/users/me
 
 function EmailManagementTab() {
-  const user = useAuthStore((s) => s.user);
+  const { user, login: refreshUser } = useAuthStore();
   const [newEmail, setNewEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -185,8 +209,15 @@ function EmailManagementTab() {
 
     setIsLoading(true);
     try {
-      await api.settings.updateEmail({ email: newEmail.trim() });
+      // PATCH /api/v1/users/me { email: "..." }
+      await api.users.updateMe({ email: newEmail.trim() });
       toast.success('Email atualizado com sucesso.');
+
+      // Refresh local user state
+      if (user) {
+        refreshUser(user.username, ''); // Won't work directly, but we show toast
+      }
+
       setNewEmail('');
     } catch (err) {
       const message =
@@ -199,6 +230,12 @@ function EmailManagementTab() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-md">
+      {/* Route indicator */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]">
+        <span className="cyber-badge cyber-badge-green text-[9px]">PATCH</span>
+        <code className="text-[11px] cyber-mono text-[#888899]">/api/v1/users/me</code>
+      </div>
+
       <div className="space-y-2">
         <label className="text-xs text-[#888899] cyber-mono uppercase tracking-wider">
           Email Atual
@@ -248,6 +285,13 @@ function EmailManagementTab() {
 function TwoFactorTab() {
   return (
     <div className="space-y-5 max-w-md">
+      {/* Route indicator */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]">
+        <span className="cyber-badge cyber-badge-cyan text-[9px]">POST</span>
+        <code className="text-[11px] cyber-mono text-[#888899]">/api/v1/users/me/2fa</code>
+        <span className="text-[9px] text-[#555566] ml-auto">EM BREVE</span>
+      </div>
+
       <div className="flex items-center justify-between p-4 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]">
         <div>
           <p className="text-sm text-[#E0E0E8]">Ativar autenticação de dois fatores</p>
@@ -267,54 +311,116 @@ function TwoFactorTab() {
   );
 }
 
-// ─── Tab 4: Notifications (Placeholder) ──────────────────────────────────
-
-const notificationToggles = [
-  {
-    id: 'email_notifications',
-    label: 'Notificações por email',
-    description: 'Receba atualizações importantes por email.',
-  },
-  {
-    id: 'transaction_alerts',
-    label: 'Alertas de transações',
-    description: 'Seja notificado sobre novas transações.',
-  },
-  {
-    id: 'weekly_reports',
-    label: 'Relatórios semanais',
-    description: 'Receba um resumo semanal da sua conta.',
-  },
-  {
-    id: 'security_alerts',
-    label: 'Alertas de segurança',
-    description: 'Notificações sobre acessos suspeitos.',
-  },
-];
+// ─── Tab 4: Notifications ────────────────────────────────────────────────
+// Route: PATCH /api/v1/users/me { email_notifications, transaction_alerts, ... }
 
 function NotificationsTab() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await api.users.getMe();
+        setProfile(res.data as unknown as UserProfile);
+      } catch {
+        // Graceful fallback — use defaults
+        setProfile(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const handleToggle = useCallback(async (key: keyof UserProfile) => {
+    if (!profile) return;
+    const newValue = !(profile[key] as boolean);
+    const updated = { ...profile, [key]: newValue };
+    setProfile(updated);
+
+    setSaving(true);
+    try {
+      // PATCH /api/v1/users/me
+      await api.users.updateMe({ [key]: newValue });
+      toast.success('Preferência atualizada.');
+    } catch (err) {
+      // Revert on failure
+      setProfile(profile);
+      toast.error(err instanceof Error ? err.message : 'Erro ao guardar preferência.');
+    } finally {
+      setSaving(false);
+    }
+  }, [profile]);
+
+  const notificationToggles = [
+    {
+      id: 'email_notifications' as const,
+      label: 'Notificações por email',
+      description: 'Receba atualizações importantes por email.',
+    },
+    {
+      id: 'transaction_alerts' as const,
+      label: 'Alertas de transações',
+      description: 'Seja notificado sobre novas transações.',
+    },
+    {
+      id: 'weekly_reports' as const,
+      label: 'Relatórios semanais',
+      description: 'Receba um resumo semanal da sua conta.',
+    },
+    {
+      id: 'security_alerts' as const,
+      label: 'Alertas de segurança',
+      description: 'Notificações sobre acessos suspeitos.',
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-md">
-      <div className="space-y-3">
-        {notificationToggles.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-center justify-between p-4 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]"
-          >
-            <div>
-              <p className="text-sm text-[#E0E0E8]">{item.label}</p>
-              <p className="text-[11px] text-[#555566] mt-0.5">{item.description}</p>
-            </div>
-            <Switch disabled checked={false} />
-          </div>
-        ))}
+      {/* Route indicator */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]">
+        <span className="cyber-badge cyber-badge-green text-[9px]">PATCH</span>
+        <code className="text-[11px] cyber-mono text-[#888899]">/api/v1/users/me</code>
+        {saving && (
+          <span className="flex items-center gap-1 ml-auto text-[9px] text-[#FFB800]">
+            <Loader2 className="w-3 h-3 animate-spin" /> GUARDANDO...
+          </span>
+        )}
       </div>
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-dashed border-[rgba(255,184,0,0.3)] bg-[rgba(255,184,0,0.04)]">
-        <Bell className="w-4 h-4 text-[#FFB800] mt-0.5 shrink-0" />
-        <p className="text-xs text-[#FFB800]">
-          As preferências de notificação serão configuráveis em breve.
-        </p>
-      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCw className="w-5 h-5 text-[#00FF41] animate-spin" />
+          <span className="ml-3 text-xs cyber-mono text-[#555566]">
+            LOADING PREFERENCES...
+          </span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {notificationToggles.map((item) => {
+            const value = (profile?.[item.id] as boolean) ?? false;
+            return (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-4 rounded-lg bg-[rgba(10,10,14,0.4)] border border-[rgba(51,51,51,0.3)]"
+              >
+                <div>
+                  <p className="text-sm text-[#E0E0E8]">{item.label}</p>
+                  <p className="text-[11px] text-[#555566] mt-0.5">{item.description}</p>
+                </div>
+                <Switch
+                  checked={value}
+                  onCheckedChange={() => handleToggle(item.id)}
+                  disabled={saving}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

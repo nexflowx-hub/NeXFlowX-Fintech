@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ArrowLeftRight, ArrowUpDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useSwap } from '@/hooks/use-wallets';
+import { useSwap, useWallets } from '@/hooks/use-wallets';
 import type { SwapResponse } from '@/lib/api/contracts';
 import {
   Select,
@@ -14,31 +14,50 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const CURRENCIES = ['EUR', 'USDT', 'GBP', 'USD'] as const;
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: '€',
   USDT: '₮',
   GBP: '£',
   USD: '$',
+  BRL: 'R$',
+  BTC: '₿',
+  ETH: 'Ξ',
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function SwapWidget() {
-  const [fromCurrency, setFromCurrency] = useState<string>('EUR');
-  const [toCurrency, setToCurrency] = useState<string>('USDT');
+  const { data: wallets } = useWallets();
+
+  // Extract unique currency codes from user's wallets (dynamic, no mock data)
+  const availableCurrencies = useMemo(() => {
+    if (!wallets || wallets.length === 0) return [];
+    const set = new Set<string>();
+    for (const w of wallets) {
+      if (w.currency_code) set.add(w.currency_code);
+    }
+    return Array.from(set).sort();
+  }, [wallets]);
+
+  // null = not yet manually selected → derive from available currencies
+  const [userFrom, setUserFrom] = useState<string | null>(null);
+  const [userTo, setUserTo] = useState<string | null>(null);
   const [amount, setAmount] = useState<string>('');
 
-  const swapMutation = useSwap();
+  // Derive effective selections: manual override or first two from wallets
+  const fromCurrency = userFrom ?? (availableCurrencies[0] ?? '');
+  const toCurrency = userTo ?? (availableCurrencies.length >= 2 ? availableCurrencies[1] : (availableCurrencies[0] ?? ''));
 
+  const swapMutation = useSwap();
   const isPending = swapMutation.isPending;
 
+  const currencySymbol = CURRENCY_SYMBOLS[fromCurrency] ?? '';
+
   const handleSwapCurrencies = useCallback(() => {
-    setFromCurrency(toCurrency);
-    setToCurrency(fromCurrency);
+    setUserFrom(toCurrency);
+    setUserTo(fromCurrency);
   }, [fromCurrency, toCurrency]);
 
   const handleSubmit = useCallback(
@@ -48,6 +67,11 @@ export default function SwapWidget() {
       const numAmount = parseFloat(amount);
       if (!numAmount || numAmount <= 0) {
         toast.error('Insira um valor válido para a conversão.');
+        return;
+      }
+
+      if (!fromCurrency || !toCurrency) {
+        toast.error('Selecione as moedas de origem e destino.');
         return;
       }
 
@@ -78,7 +102,43 @@ export default function SwapWidget() {
     [amount, fromCurrency, toCurrency, swapMutation],
   );
 
-  const currencySymbol = CURRENCY_SYMBOLS[fromCurrency] ?? '';
+  // No wallets loaded yet
+  if (!wallets) {
+    return (
+      <div className="cyber-panel p-5">
+        <div className="flex items-center gap-2 mb-5">
+          <ArrowLeftRight className="w-4 h-4 text-[#00F0FF]" />
+          <h3 className="text-sm font-semibold text-[#E0E0E8]">Conversão FX</h3>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-5 h-5 text-[#00F0FF] animate-spin" />
+          <span className="ml-3 text-xs cyber-mono text-[#555566]">
+            A CARREGAR CARTEIRAS...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // No currencies available
+  if (availableCurrencies.length === 0) {
+    return (
+      <div className="cyber-panel p-5">
+        <div className="flex items-center gap-2 mb-5">
+          <ArrowLeftRight className="w-4 h-4 text-[#00F0FF]" />
+          <h3 className="text-sm font-semibold text-[#E0E0E8]">Conversão FX</h3>
+        </div>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-xs text-[#555566] cyber-mono">
+            Nenhuma carteira disponível para fazer swap.
+          </p>
+          <p className="text-[10px] text-[#444455] cyber-mono mt-1">
+            Efetue um depósito primeiro para começar.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="cyber-panel p-5">
@@ -86,6 +146,9 @@ export default function SwapWidget() {
       <div className="flex items-center gap-2 mb-5">
         <ArrowLeftRight className="w-4 h-4 text-[#00F0FF]" />
         <h3 className="text-sm font-semibold text-[#E0E0E8]">Conversão FX</h3>
+        <span className="cyber-badge cyber-badge-cyan text-[9px] ml-auto">
+          {availableCurrencies.length} moeda{availableCurrencies.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,12 +157,12 @@ export default function SwapWidget() {
           {/* From Currency */}
           <div className="flex-1 space-y-1.5">
             <Label className="text-xs text-[#888899]">De</Label>
-            <Select value={fromCurrency} onValueChange={setFromCurrency}>
+            <Select value={fromCurrency} onValueChange={setUserFrom}>
               <SelectTrigger className="cyber-input w-full rounded-md px-3 py-2 text-sm text-[#E0E0E8]">
-                <SelectValue />
+                <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
-                {CURRENCIES.map((cur) => (
+                {availableCurrencies.map((cur) => (
                   <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
                     {cur}
                   </SelectItem>
@@ -121,12 +184,12 @@ export default function SwapWidget() {
           {/* To Currency */}
           <div className="flex-1 space-y-1.5">
             <Label className="text-xs text-[#888899]">Para</Label>
-            <Select value={toCurrency} onValueChange={setToCurrency}>
+            <Select value={toCurrency} onValueChange={setUserTo}>
               <SelectTrigger className="cyber-input w-full rounded-md px-3 py-2 text-sm text-[#E0E0E8]">
-                <SelectValue />
+                <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
-                {CURRENCIES.map((cur) => (
+                {availableCurrencies.map((cur) => (
                   <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
                     {cur}
                   </SelectItem>
@@ -170,7 +233,7 @@ export default function SwapWidget() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isPending || !amount || parseFloat(amount) <= 0}
+          disabled={isPending || !amount || parseFloat(amount) <= 0 || !fromCurrency || !toCurrency}
           className="cyber-btn-primary w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isPending ? (

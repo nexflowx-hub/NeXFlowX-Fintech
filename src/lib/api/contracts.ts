@@ -235,6 +235,13 @@ export interface UpdateEmailResponse {
   message: string;
 }
 
+export interface UpdateNotificationsRequest {
+  email_notifications?: boolean;
+  transaction_alerts?: boolean;
+  weekly_reports?: boolean;
+  security_alerts?: boolean;
+}
+
 // ─── 9. API KEYS ─────────────────────────────────────────────────────
 
 export interface ApiKey {
@@ -275,7 +282,12 @@ export interface UserMeResponse {
 }
 
 export interface UpdateUserMeRequest {
+  email?: string;
   webhook_url?: string;
+  email_notifications?: boolean;
+  transaction_alerts?: boolean;
+  weekly_reports?: boolean;
+  security_alerts?: boolean;
 }
 
 export interface UpdateUserMeResponse {
