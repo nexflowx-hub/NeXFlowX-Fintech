@@ -90,3 +90,49 @@ Stage Summary:
 - Dev server running clean on localhost:3000
 - GitHub: https://github.com/nexflowx-hub/NeXFlowX-Fintech
 - Commit: 86f6e31 "feat: NeXFlowX Core Banking v3.0 — Initial release"
+
+---
+Task ID: m1-m2
+Agent: Main Orchestrator + 3 Subagents (parallel)
+Task: MISSÃO 1 (OpenAPI Alignment) + MISSÃO 2 (RBAC Developer Hub)
+
+Work Log:
+- MISSÃO 1 — OpenAPI v5.3.1-dev Alignment:
+  - Updated UserRole: 'admin' | 'merchant' | 'customer' (3 roles)
+  - PayoutMethod expanded: IBAN, CRYPTO, PIX, SEPA, BANK
+  - NumericOrString type for Swap/Payout amounts (number | string)
+  - LedgerEntry: added direction field (CREDIT/DEBIT)
+  - LoginResponse simplified: { token, user } (no success, no refresh_token)
+  - PaymentLinks module: POST /payment-links with x-api-key header
+  - ActionTicket: aligned with OpenAPI (type, priority, merchant object)
+  - Fixed Magic Sum Bug: wallet balances shown per-currency, not mixed
+  - Financial Activity Table: added Direction column
+  - Payout Widget: PIX/SEPA/BANK methods added
+  - New Deposit Widget: POST /payment-links for account top-up
+
+- MISSÃO 2 — RBAC Developer Hub:
+  - Created api-management.tsx with 3-state RBAC:
+    - customer: LOCKED view with amber Lock icon + upgrade CTA + 3 blurred preview cards
+    - merchant: FULL access (API Keys, Webhooks, Docs tabs)
+    - admin: FULL access (same as merchant)
+  - Sidebar: Deposits + Developer/API sections (visible to all roles)
+  - Header: 3 role badges (ADMIN=amber/Crown, MERCHANT=green/Shield, CUSTOMER=cyan/User)
+  - Dashboard Shell: deposits + developer lazy-loaded sections
+  - Dashboard Overview: per-currency stats + Deposit quick action
+
+- Foundation updates:
+  - auth-store.ts: added isCustomer() helper, default role='customer'
+  - dashboard-store.ts: added 'deposits' and 'developer' sections (10 total)
+  - use-wallets.ts: added useDeposit() hook, fixed ActionTicket mapping, removed reject
+  - admin-approval-table.tsx: rewrote for new ActionTicket shape (type/priority/merchant)
+
+- Dossier Técnico v3.1.0: completely rewritten to reflect OpenAPI v5.3.1-dev
+
+Stage Summary:
+- 15 files modified, +1332 lines, -210 lines
+- 2 new components: deposit-widget.tsx, api-management.tsx
+- 1 file completely rewritten: admin-approval-table.tsx
+- Zero ESLint errors
+- Dev server running clean on localhost:3000
+- GitHub: https://github.com/nexflowx-hub/NeXFlowX-Fintech
+- Commits: 8ff8cae, 163c263
