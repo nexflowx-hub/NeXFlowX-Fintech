@@ -23,6 +23,14 @@ import { Label } from '@/components/ui/label';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function formatCurrency(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${currency} ${amount.toLocaleString('pt-BR')}`;
+  }
+}
+
 const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: '\u20AC',
   USDT: '\u20AE',
@@ -36,14 +44,17 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 export default function DepositWidget() {
   const { data: wallets } = useWallets();
 
-  // Extract unique currency codes from user's wallets (dynamic, no mock data)
+  // Extract unique currency codes from MERCHANT wallets only (prevents 400 errors)
   const availableCurrencies = useMemo(() => {
     if (!wallets || wallets.length === 0) return [];
-    const set = new Set<string>();
+    const map = new Map<string, number>();
     for (const w of wallets) {
-      if (w.currency_code) set.add(w.currency_code);
+      // Only merchant wallet types
+      if (w.type === 'merchant' && w.currency_code) {
+        map.set(w.currency_code, (map.get(w.currency_code) ?? 0) + w.balance_available);
+      }
     }
-    return Array.from(set).sort();
+    return Array.from(map.entries()).map(([code, balance]) => ({ code, balance }));
   }, [wallets]);
 
   const [amount, setAmount] = useState<string>('');
@@ -56,8 +67,8 @@ export default function DepositWidget() {
   const depositMutation = useDeposit();
   const isPending = depositMutation.isPending;
 
-  // Derive effective currency: manual override or first from wallets
-  const currency = userCurrency ?? (availableCurrencies[0] ?? '');
+  // Derive effective currency: manual override or first from merchant wallets
+  const currency = userCurrency ?? (availableCurrencies[0]?.code ?? '');
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] ?? '';
 
@@ -173,8 +184,11 @@ export default function DepositWidget() {
               </SelectTrigger>
               <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
                 {availableCurrencies.map((cur) => (
-                  <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
-                    {cur}
+                  <SelectItem key={cur.code} value={cur.code} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
+                    <span className="flex items-center justify-between gap-4 w-full">
+                      <span>{cur.code}</span>
+                      <span className="text-[10px] text-[#555566]">{formatCurrency(cur.balance, cur.code)}</span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

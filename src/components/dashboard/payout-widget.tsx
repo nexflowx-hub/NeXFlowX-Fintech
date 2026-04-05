@@ -88,14 +88,17 @@ function getMethodDescription(method: PayoutMethod): string {
 export default function PayoutWidget() {
   const { data: wallets } = useWallets();
 
-  // Extract unique currency codes from user's wallets (dynamic, no mock data)
+  // Extract unique currency codes from MERCHANT wallets only (prevents 400 errors)
   const availableCurrencies = useMemo(() => {
     if (!wallets || wallets.length === 0) return [];
-    const set = new Set<string>();
+    const map = new Map<string, number>();
     for (const w of wallets) {
-      if (w.currency_code) set.add(w.currency_code);
+      // Only merchant wallet types — treasury/fee/fx_pool currencies cannot be used for payout
+      if (w.type === 'merchant' && w.currency_code) {
+        map.set(w.currency_code, (map.get(w.currency_code) ?? 0) + w.balance_available);
+      }
     }
-    return Array.from(set).sort();
+    return Array.from(map.entries()).map(([code, balance]) => ({ code, balance }));
   }, [wallets]);
 
   const [amount, setAmount] = useState<string>('');
@@ -110,12 +113,17 @@ export default function PayoutWidget() {
   const payoutMutation = usePayout();
   const isPending = payoutMutation.isPending;
 
-  // Derive effective currency: manual override or first from wallets
-  const currency = userCurrency ?? (availableCurrencies[0] ?? '');
+  // Derive effective currency: manual override or first from merchant wallets
+  const currency = userCurrency ?? (availableCurrencies[0]?.code ?? '');
 
   const currencySymbol = useMemo(() => {
     return CURRENCY_SYMBOLS[currency] ?? '';
   }, [currency]);
+
+  // Get balance for selected currency
+  const currentBalance = useMemo(() => {
+    return availableCurrencies.find((c) => c.code === currency)?.balance ?? 0;
+  }, [availableCurrencies, currency]);
 
   const numAmount = parseFloat(amount) || 0;
 
@@ -139,10 +147,16 @@ export default function PayoutWidget() {
         return;
       }
 
+      // Validate sufficient balance
+      if (numAmount > currentBalance) {
+        toast.error(`Saldo insuficiente. Disponível: ${formatCurrency(currentBalance, currency)}`);
+        return;
+      }
+
       setDialogSuccess(false);
       setDialogOpen(true);
     },
-    [formIsValid, numAmount, method],
+    [formIsValid, numAmount, method, currentBalance, currency],
   );
 
   const handleConfirmPayout = useCallback(() => {
@@ -234,7 +248,7 @@ export default function PayoutWidget() {
               </div>
             </div>
 
-            {/* Currency — dynamic from wallets */}
+            {/* Currency — dynamic from merchant wallets only */}
             <div className="space-y-1.5">
               <Label className="text-xs text-[#888899]">Moeda</Label>
               <Select value={currency} onValueChange={setUserCurrency}>
@@ -243,13 +257,26 @@ export default function PayoutWidget() {
                 </SelectTrigger>
                 <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
                   {availableCurrencies.map((cur) => (
-                    <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
-                      {cur}
+                    <SelectItem key={cur.code} value={cur.code} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
+                      <span className="flex items-center justify-between gap-4 w-full">
+                        <span>{cur.code}</span>
+                        <span className="text-[10px] text-[#555566]">{formatCurrency(cur.balance, cur.code)}</span>
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Available balance indicator */}
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-[#555566] cyber-mono">
+              Disponível ({currency})
+            </span>
+            <span className="text-xs text-[#00FF41] cyber-mono font-semibold">
+              {formatCurrency(currentBalance, currency)}
+            </span>
           </div>
 
           {/* Method */}

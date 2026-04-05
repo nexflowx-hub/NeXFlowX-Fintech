@@ -26,29 +26,45 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   ETH: 'Ξ',
 };
 
+function formatCurrency(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${currency} ${amount.toLocaleString('pt-BR')}`;
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function SwapWidget() {
   const { data: wallets } = useWallets();
 
-  // Extract unique currency codes from user's wallets (dynamic, no mock data)
+  // Extract unique currency codes from MERCHANT wallets only (prevents 400 errors from backend)
   const availableCurrencies = useMemo(() => {
     if (!wallets || wallets.length === 0) return [];
-    const set = new Set<string>();
+    const map = new Map<string, number>();
     for (const w of wallets) {
-      if (w.currency_code) set.add(w.currency_code);
+      // Only merchant wallet types — treasury/fee/fx_pool currencies cannot be used for swap
+      if (w.type === 'merchant' && w.currency_code) {
+        map.set(w.currency_code, (map.get(w.currency_code) ?? 0) + w.balance_available);
+      }
     }
-    return Array.from(set).sort();
+    return Array.from(map.entries()).map(([code, balance]) => ({ code, balance }));
   }, [wallets]);
 
-  // null = not yet manually selected → derive from available currencies
+  // null = not yet manually selected → derive from available merchant currencies
   const [userFrom, setUserFrom] = useState<string | null>(null);
   const [userTo, setUserTo] = useState<string | null>(null);
   const [amount, setAmount] = useState<string>('');
 
-  // Derive effective selections: manual override or first two from wallets
-  const fromCurrency = userFrom ?? (availableCurrencies[0] ?? '');
-  const toCurrency = userTo ?? (availableCurrencies.length >= 2 ? availableCurrencies[1] : (availableCurrencies[0] ?? ''));
+  // Derive effective selections: manual override or first two from merchant wallets
+  const fromCurrency = userFrom ?? (availableCurrencies[0]?.code ?? '');
+  const toCurrency = userTo ?? (availableCurrencies.length >= 2 ? availableCurrencies[1].code : (availableCurrencies[0]?.code ?? ''));
+
+  // Helper: get balance for a currency
+  const getBalance = useCallback((code: string) => {
+    return availableCurrencies.find((c) => c.code === code)?.balance ?? 0;
+  }, [availableCurrencies]);
 
   const swapMutation = useSwap();
   const isPending = swapMutation.isPending;
@@ -80,6 +96,13 @@ export default function SwapWidget() {
         return;
       }
 
+      // Validate that user has sufficient balance
+      const available = getBalance(fromCurrency);
+      if (numAmount > available) {
+        toast.error(`Saldo insuficiente. Disponível: ${formatCurrency(available, fromCurrency)}`);
+        return;
+      }
+
       swapMutation.mutate(
         {
           amount: numAmount,
@@ -99,7 +122,7 @@ export default function SwapWidget() {
         },
       );
     },
-    [amount, fromCurrency, toCurrency, swapMutation],
+    [amount, fromCurrency, toCurrency, swapMutation, getBalance],
   );
 
   // No wallets loaded yet
@@ -120,7 +143,7 @@ export default function SwapWidget() {
     );
   }
 
-  // No currencies available
+  // No merchant currencies available
   if (availableCurrencies.length === 0) {
     return (
       <div className="cyber-panel p-5">
@@ -130,10 +153,33 @@ export default function SwapWidget() {
         </div>
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-xs text-[#555566] cyber-mono">
-            Nenhuma carteira disponível para fazer swap.
+            Nenhuma carteira merchant disponível para fazer swap.
           </p>
           <p className="text-[10px] text-[#444455] cyber-mono mt-1">
             Efetue um depósito primeiro para começar.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Need at least 2 currencies for a meaningful swap
+  if (availableCurrencies.length < 2) {
+    return (
+      <div className="cyber-panel p-5">
+        <div className="flex items-center gap-2 mb-5">
+          <ArrowLeftRight className="w-4 h-4 text-[#00F0FF]" />
+          <h3 className="text-sm font-semibold text-[#E0E0E8]">Conversão FX</h3>
+          <span className="cyber-badge cyber-badge-amber text-[9px] ml-auto">
+            1 moeda
+          </span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-xs text-[#555566] cyber-mono">
+            Necessita de pelo menos 2 moedas na carteira merchant para fazer swap.
+          </p>
+          <p className="text-[10px] text-[#444455] cyber-mono mt-1">
+            Disponível: {availableCurrencies[0]?.code} ({formatCurrency(availableCurrencies[0]?.balance ?? 0, availableCurrencies[0]?.code ?? 'EUR')})
           </p>
         </div>
       </div>
@@ -147,7 +193,7 @@ export default function SwapWidget() {
         <ArrowLeftRight className="w-4 h-4 text-[#00F0FF]" />
         <h3 className="text-sm font-semibold text-[#E0E0E8]">Conversão FX</h3>
         <span className="cyber-badge cyber-badge-cyan text-[9px] ml-auto">
-          {availableCurrencies.length} moeda{availableCurrencies.length !== 1 ? 's' : ''}
+          {availableCurrencies.length} moeda{availableCurrencies.length !== 1 ? 's' : ''} (merchant)
         </span>
       </div>
 
@@ -163,8 +209,11 @@ export default function SwapWidget() {
               </SelectTrigger>
               <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
                 {availableCurrencies.map((cur) => (
-                  <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
-                    {cur}
+                  <SelectItem key={cur.code} value={cur.code} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
+                    <span className="flex items-center justify-between gap-4 w-full">
+                      <span>{cur.code}</span>
+                      <span className="text-[10px] text-[#555566]">{formatCurrency(cur.balance, cur.code)}</span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -190,8 +239,11 @@ export default function SwapWidget() {
               </SelectTrigger>
               <SelectContent className="bg-[#0F0F14] border-[rgba(51,51,51,0.8)]">
                 {availableCurrencies.map((cur) => (
-                  <SelectItem key={cur} value={cur} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
-                    {cur}
+                  <SelectItem key={cur.code} value={cur.code} className="text-[#E0E0E8] focus:bg-[rgba(0,255,65,0.08)] focus:text-[#00FF41]">
+                    <span className="flex items-center justify-between gap-4 w-full">
+                      <span>{cur.code}</span>
+                      <span className="text-[10px] text-[#555566]">{formatCurrency(cur.balance, cur.code)}</span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -218,8 +270,14 @@ export default function SwapWidget() {
           </div>
         </div>
 
-        {/* Preview Section */}
+        {/* Preview Section with Balance */}
         <div className="rounded-lg bg-[rgba(10,10,14,0.5)] border border-[rgba(51,51,51,0.3)] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#555566]">Disponível ({fromCurrency})</span>
+            <span className="text-xs text-[#00FF41] cyber-mono font-semibold">
+              {formatCurrency(getBalance(fromCurrency), fromCurrency)}
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[#555566]">Estimativa de conversão</span>
             <span className="text-xs text-[#888899] cyber-mono">---</span>
