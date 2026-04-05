@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useLedger } from '@/hooks/use-wallets';
-import type { LedgerEntryType, LedgerEntryStatus } from '@/lib/api/contracts';
+import type { LedgerEntryType, LedgerEntryStatus, LedgerDirection } from '@/lib/api/contracts';
 import {
   Table,
   TableHeader,
@@ -73,6 +73,11 @@ const STATUS_DOT_MAP: Record<
 
 const NEGATIVE_TYPES = new Set<LedgerEntryType>(['FEE', 'REFUND']);
 
+const DIRECTION_BADGE_MAP: Record<LedgerDirection, { label: string; className: string }> = {
+  CREDIT: { label: 'CREDIT', className: 'cyber-badge cyber-badge-green' },
+  DEBIT: { label: 'DEBIT', className: 'cyber-badge cyber-badge-red' },
+};
+
 // ─── Skeleton Rows ─────────────────────────────────────────────────────────
 
 function SkeletonRows() {
@@ -91,6 +96,9 @@ function SkeletonRows() {
           </TableCell>
           <TableCell>
             <Skeleton className="h-4 w-24 rounded" />
+          </TableCell>
+          <TableCell>
+            <Skeleton className="h-4 w-16 rounded" />
           </TableCell>
           <TableCell>
             <Skeleton className="h-4 w-10 rounded" />
@@ -256,6 +264,9 @@ export default function FinancialActivityTable() {
                       Status
                     </TableHead>
                     <TableHead className="text-[10px] text-[#555566] cyber-mono uppercase tracking-wider">
+                      Direção
+                    </TableHead>
+                    <TableHead className="text-[10px] text-[#555566] cyber-mono uppercase tracking-wider">
                       Montante
                     </TableHead>
                     <TableHead className="text-[10px] text-[#555566] cyber-mono uppercase tracking-wider">
@@ -274,7 +285,7 @@ export default function FinancialActivityTable() {
                     <SkeletonRows />
                   ) : isError ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="h-32">
+                      <TableCell colSpan={7} className="h-32">
                         <div className="flex flex-col items-center justify-center gap-3">
                           <AlertTriangle className="w-8 h-8 text-[#FF0040]" />
                           <p className="text-sm text-[#FF0040]">
@@ -291,7 +302,7 @@ export default function FinancialActivityTable() {
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="h-32">
+                      <TableCell colSpan={7} className="h-32">
                         <div className="flex items-center justify-center">
                           <span className="text-sm text-[#555566] cyber-mono">
                             Nenhuma atividade registrada.
@@ -327,6 +338,16 @@ export default function FinancialActivityTable() {
                                 {statusCfg.label}
                               </span>
                             </div>
+                          </TableCell>
+
+                          {/* Direction */}
+                          <TableCell>
+                            {entry.direction ? (() => {
+                              const dirBadge = DIRECTION_BADGE_MAP[entry.direction];
+                              return dirBadge ? (
+                                <span className={dirBadge.className}>{dirBadge.label}</span>
+                              ) : null;
+                            })() : null}
                           </TableCell>
 
                           {/* Amount */}

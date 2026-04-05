@@ -8,7 +8,9 @@ export type DashboardSection =
   | 'activity'
   | 'settings'
   | 'approvals'    // Admin only
-  | 'liquidity';   // Admin only
+  | 'liquidity'    // Admin only
+  | 'deposits'
+  | 'developer';
 
 interface DashboardStore {
   activeSection: DashboardSection;

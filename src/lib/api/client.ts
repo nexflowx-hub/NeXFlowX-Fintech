@@ -1,9 +1,10 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * NeXFlowX Core Banking — API Client V5
+ * NeXFlowX Core Banking — API Client V5.3.1-dev
  *
  * Direct calls to https://api-dev.nexflowx.tech/api/v1
  * JWT tokens stored in localStorage and injected via Authorization: Bearer
+ * Payment Links use x-api-key header instead of Bearer.
  *
  * Architecture: UI → Hooks (TanStack Query) → Client → Backend
  * Components MUST NOT call this client directly — use hooks instead.
@@ -19,6 +20,8 @@ import type {
   SwapResponse,
   PayoutRequest,
   PayoutResponse,
+  PaymentLinkRequest,
+  PaymentLinkResponse,
   LedgerResponse,
   ActionTicketsResponse,
   ApproveTicketResponse,
@@ -26,6 +29,11 @@ import type {
   ChangePasswordResponse,
   UpdateEmailRequest,
   UpdateEmailResponse,
+  ApiKeysResponse,
+  CreateApiKeyResponse,
+  UserMeResponse,
+  UpdateUserMeRequest,
+  UpdateUserMeResponse,
   APIError,
 } from './contracts';
 
@@ -91,9 +99,6 @@ export const auth = {
     });
     if (typeof window !== 'undefined' && res.token) {
       localStorage.setItem('nexflowx_token', res.token);
-      if (res.refresh_token) {
-        localStorage.setItem('nexflowx_refresh', res.refresh_token);
-      }
     }
     return res;
   },
@@ -144,7 +149,22 @@ export const payout = {
   },
 };
 
-// ─── 5. LEDGER / FINANCIAL ACTIVITY ──────────────────────────────────────
+// ─── 5. PAYMENT LINKS ─────────────────────────────────────────────────────
+
+export const paymentLinks = {
+  async create(data: PaymentLinkRequest): Promise<PaymentLinkResponse> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nexflowx_token') : null;
+    return request('/payment-links', {
+      method: 'POST',
+      headers: {
+        ...(token ? { 'x-api-key': token } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// ─── 6. LEDGER / FINANCIAL ACTIVITY ──────────────────────────────────────
 
 export const ledger = {
   async list(query: Record<string, string> = {}): Promise<LedgerResponse> {
@@ -155,7 +175,7 @@ export const ledger = {
   },
 };
 
-// ─── 6. ACTION TICKETS (Admin) ───────────────────────────────────────────
+// ─── 7. ACTION TICKETS (Admin) ───────────────────────────────────────────
 
 export const actionTickets = {
   async list(): Promise<ActionTicketsResponse> {
@@ -165,13 +185,9 @@ export const actionTickets = {
   async approve(id: string): Promise<ApproveTicketResponse> {
     return request(`/action-tickets/${id}/approve`, { method: 'POST' });
   },
-
-  async reject(id: string): Promise<ApproveTicketResponse> {
-    return request(`/action-tickets/${id}/reject`, { method: 'POST' });
-  },
 };
 
-// ─── 7. SETTINGS ─────────────────────────────────────────────────────────
+// ─── 8. SETTINGS ─────────────────────────────────────────────────────────
 
 export const settings = {
   async changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
@@ -189,6 +205,36 @@ export const settings = {
   },
 };
 
+// ─── 9. API KEYS ────────────────────────────────────────────────────────
+
+export const apiKeys = {
+  async list(): Promise<ApiKeysResponse> {
+    return request('/api-keys');
+  },
+
+  async create(label?: string): Promise<CreateApiKeyResponse> {
+    return request('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify(label ? { label } : {}),
+    });
+  },
+};
+
+// ─── 10. USERS ────────────────────────────────────────────────────────────
+
+export const users = {
+  async getMe(): Promise<UserMeResponse> {
+    return request('/users/me');
+  },
+
+  async updateMe(data: UpdateUserMeRequest): Promise<UpdateUserMeResponse> {
+    return request('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // ─── AGGREGATED CLIENT ────────────────────────────────────────────────────
 
 export const api = {
@@ -196,7 +242,10 @@ export const api = {
   wallets,
   swap,
   payout,
+  paymentLinks,
   ledger,
   actionTickets,
   settings,
+  apiKeys,
+  users,
 };

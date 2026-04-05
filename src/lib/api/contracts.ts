@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * NeXFlowX Core Banking — TypeScript Contracts V5
+ * NeXFlowX Core Banking — TypeScript Contracts V5.3.1-dev
  *
  * Matches the backend at https://api-dev.nexflowx.tech/api/v1
  * Includes adapters for API → Frontend normalization.
@@ -9,7 +9,7 @@
 
 // ─── ENUMS & HELPERS ─────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'merchant';
+export type UserRole = 'admin' | 'merchant' | 'customer';
 
 export type WalletType = 'merchant' | 'treasury' | 'fee' | 'fx_pool';
 
@@ -17,9 +17,14 @@ export type LedgerEntryType = 'PAYIN' | 'SWAP' | 'PAYOUT' | 'FEE' | 'REFUND';
 
 export type LedgerEntryStatus = 'pending' | 'cleared' | 'failed';
 
-export type PayoutMethod = 'IBAN' | 'CRYPTO';
+export type LedgerDirection = 'CREDIT' | 'DEBIT';
+
+export type PayoutMethod = 'IBAN' | 'CRYPTO' | 'PIX' | 'SEPA' | 'BANK';
 
 export type ActionTicketStatus = 'pending_review' | 'approved' | 'rejected' | 'processing';
+
+/** Amount fields accept number or string from the API */
+export type NumericOrString = number | string;
 
 // ─── ADAPTERS ────────────────────────────────────────────────────────────
 
@@ -52,6 +57,7 @@ export function mapLedgerEntry(raw: Record<string, unknown>): LedgerEntry {
     id: String(raw.id ?? ''),
     type: (String(raw.type ?? 'PAYIN')) as LedgerEntryType,
     status: (String(raw.status ?? 'pending')) as LedgerEntryStatus,
+    direction: String(raw.direction ?? 'CREDIT') as LedgerDirection,
     amount: safeNum(raw.amount),
     currency: String(raw.currency ?? 'EUR'),
     description: raw.description ? String(raw.description) : undefined,
@@ -66,13 +72,12 @@ export function mapLedgerEntry(raw: Record<string, unknown>): LedgerEntry {
 export function mapActionTicket(raw: Record<string, unknown>): ActionTicket {
   return {
     id: String(raw.id ?? ''),
-    payout_id: raw.payout_id ? String(raw.payout_id) : undefined,
-    merchant_id: raw.merchant_id ? String(raw.merchant_id) : undefined,
-    merchant_name: raw.merchant_name ? String(raw.merchant_name) : 'N/A',
-    amount: safeNum(raw.amount),
-    currency: String(raw.currency ?? 'EUR'),
-    method: (String(raw.method ?? 'IBAN')) as PayoutMethod,
-    destination: raw.destination ? String(raw.destination) : '',
+    type: raw.type ? String(raw.type) : undefined,
+    priority: raw.priority ? String(raw.priority) : undefined,
+    merchant: raw.merchant
+      ? { username: String((raw.merchant as Record<string, unknown>)?.username ?? '') }
+      : undefined,
+    metadata: raw.metadata as Record<string, unknown> | undefined,
     status: (String(raw.status ?? 'pending_review')) as ActionTicketStatus,
     created_at: String(raw.created_at ?? new Date().toISOString()),
   };
@@ -86,10 +91,7 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  success: boolean;
   token: string;
-  refresh_token?: string;
-  expires_in?: number;
   user: AuthUser;
 }
 
@@ -119,14 +121,13 @@ export interface Wallet {
 }
 
 export interface WalletsResponse {
-  success: boolean;
   data: Wallet[];
 }
 
 // ─── 3. SWAP ─────────────────────────────────────────────────────────────
 
 export interface SwapRequest {
-  amount: number;
+  amount: NumericOrString;
   from_currency: string;
   to_currency: string;
 }
@@ -141,7 +142,7 @@ export interface SwapResponse {
 // ─── 4. PAYOUT ───────────────────────────────────────────────────────────
 
 export interface PayoutRequest {
-  amount: number;
+  amount: NumericOrString;
   currency: string;
   method: PayoutMethod;
   destination: string;
@@ -152,12 +153,29 @@ export interface PayoutResponse {
   message: string;
 }
 
-// ─── 5. LEDGER / FINANCIAL ACTIVITY ─────────────────────────────────────
+// ─── 5. PAYMENT LINKS ────────────────────────────────────────────────────
+
+export interface PaymentLinkRequest {
+  amount: NumericOrString;
+  currency: string;
+}
+
+export interface PaymentLinkData {
+  id: string;
+  shareable_url: string;
+}
+
+export interface PaymentLinkResponse {
+  data: PaymentLinkData;
+}
+
+// ─── 6. LEDGER / FINANCIAL ACTIVITY ─────────────────────────────────────
 
 export interface LedgerEntry {
   id: string;
   type: LedgerEntryType;
   status: LedgerEntryStatus;
+  direction: LedgerDirection;
   amount: number;
   currency: string;
   description?: string;
@@ -166,7 +184,6 @@ export interface LedgerEntry {
 }
 
 export interface LedgerResponse {
-  success: boolean;
   data: LedgerEntry[];
   pagination?: {
     page: number;
@@ -176,23 +193,19 @@ export interface LedgerResponse {
   };
 }
 
-// ─── 6. ACTION TICKETS (Admin) ─────────────────────────────────────────
+// ─── 7. ACTION TICKETS (Admin) ─────────────────────────────────────────
 
 export interface ActionTicket {
   id: string;
-  payout_id?: string;
-  merchant_id?: string;
-  merchant_name: string;
-  amount: number;
-  currency: string;
-  method: PayoutMethod;
-  destination: string;
+  type?: string;
+  priority?: string;
+  merchant?: { username: string };
+  metadata?: Record<string, unknown>;
   status: ActionTicketStatus;
   created_at: string;
 }
 
 export interface ActionTicketsResponse {
-  success: boolean;
   data: ActionTicket[];
 }
 
@@ -201,7 +214,7 @@ export interface ApproveTicketResponse {
   message: string;
 }
 
-// ─── 7. SETTINGS ─────────────────────────────────────────────────────────
+// ─── 8. SETTINGS ─────────────────────────────────────────────────────────
 
 export interface ChangePasswordRequest {
   current_password: string;
@@ -218,6 +231,54 @@ export interface UpdateEmailRequest {
 }
 
 export interface UpdateEmailResponse {
+  success: boolean;
+  message: string;
+}
+
+// ─── 9. API KEYS ─────────────────────────────────────────────────────
+
+export interface ApiKey {
+  id: string;
+  key_hash: string;
+  label?: string;
+  created_at: string;
+  last_used_at?: string;
+  is_active: boolean;
+}
+
+export interface ApiKeysResponse {
+  data: ApiKey[];
+}
+
+export interface CreateApiKeyResponse {
+  data: {
+    key: string;
+    key_hash: string;
+    label?: string;
+    created_at: string;
+  };
+}
+
+// ─── 10. USERS (Profile) ────────────────────────────────────────────────
+
+export interface UserMeResponse {
+  data: {
+    id: string;
+    username: string;
+    email: string;
+    role: UserRole;
+    organization_id: string;
+    webhook_url?: string;
+    hmac_secret?: string;
+    created_at: string;
+  };
+}
+
+export interface UpdateUserMeRequest {
+  webhook_url?: string;
+}
+
+export interface UpdateUserMeResponse {
   success: boolean;
   message: string;
 }

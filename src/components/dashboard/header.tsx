@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, Shield, Activity, Clock, Crown } from 'lucide-react';
+import { Bell, Search, Shield, Activity, Clock, Crown, User } from 'lucide-react';
 import { useDashboardStore, type DashboardSection } from '@/lib/dashboard-store';
 import { useAuthStore, getUserRole } from '@/lib/auth-store';
 
@@ -12,6 +12,8 @@ const sectionTitles: Record<DashboardSection, string> = {
   payouts: 'Levantamentos',
   activity: 'Atividade Financeira',
   settings: 'Definições & Segurança',
+  deposits: 'Depósitos',
+  developer: 'Developer / API',
   approvals: 'Aprovações',
   liquidity: 'Liquidez do Sistema',
 };
@@ -23,6 +25,8 @@ const sectionLabels: Record<DashboardSection, string> = {
   payouts: 'LEVANTAMENTOS // SAQUES',
   activity: 'HISTÓRICO // ATIVIDADE',
   settings: 'CONFIGURAÇÃO // SEGURANÇA',
+  deposits: 'DEPÓSITOS // TOP-UP',
+  developer: 'DEVELOPER // API',
   approvals: 'APROVAÇÕES // ADMIN',
   liquidity: 'LIQUIDEZ // SISTEMA',
 };
@@ -77,15 +81,23 @@ export default function Header() {
         {/* Role Badge */}
         <div
           className={`hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded cyber-badge ${
-            role === 'admin' ? 'cyber-badge-amber' : 'cyber-badge-green'
+            role === 'admin'
+              ? 'cyber-badge-amber'
+              : role === 'merchant'
+                ? 'cyber-badge-green'
+                : 'cyber-badge-cyan'
           }`}
         >
           {role === 'admin' ? (
             <Crown className="w-3 h-3" />
-          ) : (
+          ) : role === 'merchant' ? (
             <Shield className="w-3 h-3" />
+          ) : (
+            <User className="w-3 h-3" />
           )}
-          <span>{role === 'admin' ? 'ADMIN' : 'MERCHANT'}</span>
+          <span>
+            {role === 'admin' ? 'ADMIN' : role === 'merchant' ? 'MERCHANT' : 'CUSTOMER'}
+          </span>
         </div>
       </div>
 

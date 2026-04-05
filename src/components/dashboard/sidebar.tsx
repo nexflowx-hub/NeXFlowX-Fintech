@@ -13,6 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  PlusCircle,
+  Code,
 } from 'lucide-react';
 import { useDashboardStore, type DashboardSection } from '@/lib/dashboard-store';
 import { useAuthStore, isAdmin } from '@/lib/auth-store';
@@ -61,6 +63,18 @@ const navItems: NavItem[] = [
     label: 'Definições',
     icon: <Settings className="w-4 h-4" />,
     description: '⚙️ Configurações & segurança',
+  },
+  {
+    id: 'deposits',
+    label: 'Depósitos',
+    icon: <PlusCircle className="w-4 h-4" />,
+    description: '💳 Carregar conta',
+  },
+  {
+    id: 'developer',
+    label: 'Developer / API',
+    icon: <Code className="w-4 h-4" />,
+    description: '🔌 Chaves, Webhooks & Docs',
   },
   {
     id: 'approvals',

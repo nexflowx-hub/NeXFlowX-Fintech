@@ -6,7 +6,6 @@ import { useAuthStore, isAdmin } from '@/lib/auth-store';
 import {
   useActionTickets,
   useApproveTicket,
-  useRejectTicket,
 } from '@/hooks/use-wallets';
 import type { ActionTicketStatus } from '@/lib/api/contracts';
 type StatusString = ActionTicketStatus | string;
@@ -21,7 +20,8 @@ import {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function truncate(str: string, maxLen: number = 12): string {
+function truncate(str: string, maxLen: number = 16): string {
+  if (!str) return '—';
   if (str.length <= maxLen) return str;
   return `${str.slice(0, maxLen - 3)}...`;
 }
@@ -37,14 +37,6 @@ function formatDate(iso: string): string {
     });
   } catch {
     return '—';
-  }
-}
-
-function formatCurrency(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount);
-  } catch {
-    return `${currency} ${amount.toLocaleString('pt-BR')}`;
   }
 }
 
@@ -112,13 +104,10 @@ function SkeletonRows() {
           key={`skeleton-row-${i}`}
           className="flex items-center gap-4 px-4 py-3 rounded-lg bg-[rgba(10,10,14,0.4)] animate-pulse"
         >
-          <div className="w-16 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
+          <div className="w-20 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
           <div className="w-24 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
           <div className="w-20 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
-          <div className="w-12 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
-          <div className="w-16 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
           <div className="w-28 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
-          <div className="w-20 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
           <div className="w-20 h-4 rounded bg-[rgba(51,51,51,0.4)]" />
           <div className="flex gap-2">
             <div className="w-20 h-8 rounded bg-[rgba(51,51,51,0.4)]" />
@@ -137,7 +126,6 @@ export default function AdminApprovalTable() {
 
   const { data: tickets, isLoading, isError } = useActionTickets();
   const approveMutation = useApproveTicket();
-  const rejectMutation = useRejectTicket();
 
   if (!isAdmin(user)) {
     return (
@@ -147,7 +135,7 @@ export default function AdminApprovalTable() {
     );
   }
 
-  const isMutating = approveMutation.isPending || rejectMutation.isPending;
+  const isMutating = approveMutation.isPending;
 
   const handleApprove = async (id: string) => {
     try {
@@ -155,16 +143,6 @@ export default function AdminApprovalTable() {
       toast.success('Ticket aprovado com sucesso.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao aprovar ticket.';
-      toast.error(message);
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    try {
-      await rejectMutation.mutateAsync(id);
-      toast.success('Ticket rejeitado com sucesso.');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao rejeitar ticket.';
       toast.error(message);
     }
   };
@@ -202,19 +180,13 @@ export default function AdminApprovalTable() {
                     ID
                   </TableHead>
                   <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
+                    Tipo
+                  </TableHead>
+                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
+                    Prioridade
+                  </TableHead>
+                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
                     Merchant
-                  </TableHead>
-                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
-                    Montante
-                  </TableHead>
-                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
-                    Moeda
-                  </TableHead>
-                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
-                    Método
-                  </TableHead>
-                  <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
-                    Destino
                   </TableHead>
                   <TableHead className="text-[10px] cyber-mono text-[#555566] uppercase tracking-wider">
                     Estado
@@ -236,23 +208,18 @@ export default function AdminApprovalTable() {
                     <TableCell className="text-xs cyber-mono text-[#888899]">
                       {truncate(ticket.id, 10)}
                     </TableCell>
-                    <TableCell className="text-xs text-[#E0E0E8]">
-                      {ticket.merchant_name}
-                    </TableCell>
-                    <TableCell className="text-xs cyber-mono text-[#E0E0E8] font-medium">
-                      {formatCurrency(ticket.amount, ticket.currency)}
-                    </TableCell>
-                    <TableCell className="text-xs cyber-mono text-[#888899]">
-                      {ticket.currency}
+                    <TableCell>
+                      <span className="text-xs text-[#888899] cyber-mono">
+                        {ticket.type || '—'}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <span className="cyber-badge cyber-badge-cyan">{ticket.method}</span>
+                      <span className="text-xs text-[#E0E0E8] cyber-mono">
+                        {ticket.priority || '—'}
+                      </span>
                     </TableCell>
-                    <TableCell
-                      className="text-xs cyber-mono text-[#888899]"
-                      title={ticket.destination}
-                    >
-                      {truncate(ticket.destination, 20)}
+                    <TableCell className="text-xs text-[#E0E0E8]">
+                      {ticket.merchant_name}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={ticket.status} />
@@ -277,21 +244,6 @@ export default function AdminApprovalTable() {
                               <Check className="w-3 h-3" />
                             )}
                             Aprovar
-                          </button>
-                          <button
-                            onClick={() => handleReject(ticket.id)}
-                            disabled={isMutating}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium
-                              border border-[rgba(255,0,64,0.3)] text-[#FF0040]
-                              hover:bg-[rgba(255,0,64,0.1)] transition-colors
-                              disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {rejectMutation.isPending ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <X className="w-3 h-3" />
-                            )}
-                            Rejeitar
                           </button>
                         </div>
                       )}

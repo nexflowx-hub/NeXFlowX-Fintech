@@ -28,6 +28,12 @@ const AdminApprovalTable = lazy(
 const SystemLiquidityPanel = lazy(
   () => import('@/components/dashboard/system-liquidity-panel')
 );
+const DepositWidget = lazy(
+  () => import('@/components/dashboard/deposit-widget')
+);
+const ApiManagement = lazy(
+  () => import('@/components/dashboard/api-management')
+);
 
 /* ── Section label mapping ── */
 const sectionLabels: Record<DashboardSection, string> = {
@@ -37,6 +43,8 @@ const sectionLabels: Record<DashboardSection, string> = {
   payouts: 'LEVANTAMENTOS // SAQUES',
   activity: 'HISTÓRICO // ATIVIDADE',
   settings: 'CONFIGURAÇÃO // SEGURANÇA',
+  deposits: 'DEPÓSITOS // TOP-UP',
+  developer: 'DEVELOPER // API',
   approvals: 'APROVAÇÕES // ADMIN',
   liquidity: 'LIQUIDEZ // SISTEMA',
 };
@@ -78,6 +86,8 @@ function ActiveSection({ section }: { section: DashboardSection }) {
       {section === 'settings' && <SettingsSecurity />}
       {section === 'approvals' && <AdminApprovalTable />}
       {section === 'liquidity' && <SystemLiquidityPanel />}
+      {section === 'deposits' && <DepositWidget />}
+      {section === 'developer' && <ApiManagement />}
     </Suspense>
   );
 }

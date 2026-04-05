@@ -26,9 +26,12 @@ import { Label } from '@/components/ui/label';
 
 const CURRENCIES = ['EUR', 'USDT'] as const;
 
-const METHODS: { value: PayoutMethod; label: string }[] = [
-  { value: 'IBAN', label: 'IBAN' },
-  { value: 'CRYPTO', label: 'Crypto' },
+const METHODS: { value: PayoutMethod; label: string; description: string }[] = [
+  { value: 'IBAN', label: 'IBAN', description: 'Transferência SEPA' },
+  { value: 'SEPA', label: 'SEPA', description: 'Crédito SEPA' },
+  { value: 'PIX', label: 'PIX', description: 'Pix instantâneo (BRL)' },
+  { value: 'CRYPTO', label: 'Crypto', description: 'Blockchain' },
+  { value: 'BANK', label: 'Bank Transfer', description: 'Transferência bancária' },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -49,13 +52,29 @@ function maskIban(iban: string): string {
 }
 
 function getDestinationLabel(method: PayoutMethod): string {
-  return method === 'IBAN' ? 'IBAN' : 'Endereço da carteira';
+  switch (method) {
+    case 'IBAN': return 'IBAN';
+    case 'SEPA': return 'IBAN SEPA';
+    case 'PIX': return 'Chave PIX';
+    case 'CRYPTO': return 'Endereço da carteira';
+    case 'BANK': return 'Dados bancários';
+    default: return 'Destino';
+  }
 }
 
 function getDestinationPlaceholder(method: PayoutMethod): string {
-  return method === 'IBAN'
-    ? 'PT50 1234 5678 9012 3456 7890 12'
-    : '0x1234...abcd';
+  switch (method) {
+    case 'IBAN': return 'PT50 1234 5678 9012 3456 7890 12';
+    case 'SEPA': return 'DE89 3704 0044 0532 0130 00';
+    case 'PIX': return 'email@exemplo.com ou CPF/CNPJ';
+    case 'CRYPTO': return '0x1234...abcd';
+    case 'BANK': return 'Nome do banco + NIB/AG';
+    default: return '';
+  }
+}
+
+function getMethodDescription(method: PayoutMethod): string {
+  return METHODS.find((m) => m.value === method)?.description ?? method;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -82,7 +101,7 @@ export default function PayoutWidget() {
   const formIsValid = numAmount > 0 && destination.trim().length > 0;
 
   const maskedDestination = useMemo(() => {
-    if (method === 'IBAN') return maskIban(destination);
+    if (method === 'IBAN' || method === 'SEPA') return maskIban(destination);
     return `${destination.slice(0, 6)}${'•'.repeat(Math.max(0, destination.length - 10))}${destination.slice(-4)}`;
   }, [method, destination]);
 
@@ -292,7 +311,10 @@ export default function PayoutWidget() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#555566]">Método</span>
-                  <span className="cyber-badge cyber-badge-cyan">{method}</span>
+                  <div className="text-right">
+                    <span className="cyber-badge cyber-badge-cyan">{method}</span>
+                    <p className="text-[10px] text-[#555566] mt-0.5">{getMethodDescription(method)}</p>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs text-[#555566] shrink-0">{getDestinationLabel(method)}</span>

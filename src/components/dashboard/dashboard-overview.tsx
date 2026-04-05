@@ -11,6 +11,7 @@ import {
   List,
   AlertTriangle,
   ArrowUpRight,
+  PlusCircle,
 } from 'lucide-react';
 import { useWallets, useLedger } from '@/hooks/use-wallets';
 import type { LedgerEntry, LedgerEntryType, LedgerEntryStatus } from '@/lib/api/contracts';
@@ -197,15 +198,17 @@ export default function DashboardOverview() {
   const entries = ledgerRes?.data ?? [];
   const walletList = wallets ?? [];
 
-  // ── Derived stats ──
-  const stats = useMemo(() => {
-    const totalAvailable = walletList.reduce((sum, w) => sum + w.balance_available, 0);
-    const totalBalance = walletList.reduce((sum, w) => sum + w.balance_total, 0);
-    const clearingFunds = totalBalance - totalAvailable;
-    const activeWallets = walletList.length;
-
-    return { totalAvailable, totalBalance, clearingFunds, activeWallets };
+  // ── Derived stats (per-currency, avoids magic sum across currencies) ──
+  const currencyStats = useMemo(() => {
+    if (walletList.length === 0) return [];
+    const map = new Map<string, number>();
+    for (const w of walletList) {
+      map.set(w.currency_code, (map.get(w.currency_code) ?? 0) + w.balance_available);
+    }
+    return Array.from(map.entries()).map(([currency, available]) => ({ currency, available }));
   }, [walletList]);
+
+  const activeWallets = walletList.length;
 
   return (
     <div className="space-y-6">
@@ -239,51 +242,23 @@ export default function DashboardOverview() {
           </div>
         ) : (
           <>
-            {/* Saldo Disponível Total */}
-            <StatCard
-              label="Saldo Disponível Total"
-              value={formatCurrency(stats.totalAvailable)}
-              icon={<Wallet className="w-4 h-4" />}
-              color="#00FF41"
-              borderColor="border-[rgba(0,255,65,0.2)]"
-              iconBg="bg-[rgba(0,255,65,0.1)]"
-            />
-
-            {/* Saldo Total */}
-            <StatCard
-              label="Saldo Total"
-              value={formatCurrency(stats.totalBalance)}
-              icon={<Landmark className="w-4 h-4" />}
-              color="#00F0FF"
-              borderColor="border-[rgba(0,240,255,0.2)]"
-              iconBg="bg-[rgba(0,240,255,0.1)]"
-            />
-
-            {/* Fundos em Clearing — only if > 0 */}
-            {stats.clearingFunds > 0 ? (
+            {/* Per-currency balance cards */}
+            {currencyStats.map(({ currency, available }) => (
               <StatCard
-                label="Fundos em Clearing"
-                value={formatCurrency(stats.clearingFunds)}
-                icon={<Clock className="w-4 h-4" />}
-                color="#FFB800"
-                borderColor="border-[rgba(255,184,0,0.2)]"
-                iconBg="bg-[rgba(255,184,0,0.1)]"
+                key={currency}
+                label={`Disponível ${currency}`}
+                value={formatCurrency(available, currency)}
+                icon={<Wallet className="w-4 h-4" />}
+                color="#00FF41"
+                borderColor="border-[rgba(0,255,65,0.2)]"
+                iconBg="bg-[rgba(0,255,65,0.1)]"
               />
-            ) : (
-              <StatCard
-                label="Carteiras Ativas"
-                value={String(stats.activeWallets)}
-                icon={<CreditCard className="w-4 h-4" />}
-                color="#BF40FF"
-                borderColor="border-[rgba(191,64,255,0.2)]"
-                iconBg="bg-[rgba(191,64,255,0.1)]"
-              />
-            )}
+            ))}
 
             {/* Carteiras Ativas */}
             <StatCard
               label="Carteiras Ativas"
-              value={String(stats.activeWallets)}
+              value={String(activeWallets)}
               icon={<CreditCard className="w-4 h-4" />}
               color="#BF40FF"
               borderColor="border-[rgba(191,64,255,0.2)]"
@@ -295,7 +270,15 @@ export default function DashboardOverview() {
 
       {/* ═══ Section 2 — Quick Actions ═════════════════════════════ */}
       {!isLoading && !isError && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <QuickActionCard
+            label="Depositar"
+            icon={<PlusCircle className="w-5 h-5" />}
+            color="#FF6B35"
+            borderColor="border-[rgba(255,107,53,0.2)]"
+            iconBg="bg-[rgba(255,107,53,0.1)]"
+            onClick={() => setActiveSection('deposits')}
+          />
           <QuickActionCard
             label="Converter Moeda"
             icon={<ArrowLeftRight className="w-5 h-5" />}

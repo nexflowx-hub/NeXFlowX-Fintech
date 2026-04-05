@@ -109,15 +109,16 @@ function WalletCard({ wallet }: WalletCardProps) {
 export default function WalletCards() {
   const { data: wallets, isLoading, isError, error, refetch } = useWallets();
 
-  const summary = useMemo(() => {
-    if (!wallets || wallets.length === 0) {
-      return { totalAvailable: 0, totalWallets: 0 };
+  const currencySummary = useMemo(() => {
+    if (!wallets || wallets.length === 0) return [];
+    const map = new Map<string, { totalAvailable: number; walletCount: number }>();
+    for (const w of wallets) {
+      const existing = map.get(w.currency_code) ?? { totalAvailable: 0, walletCount: 0 };
+      existing.totalAvailable += w.balance_available;
+      existing.walletCount += 1;
+      map.set(w.currency_code, existing);
     }
-    const totalAvailable = wallets.reduce((sum, w) => sum + w.balance_available, 0);
-    return {
-      totalAvailable,
-      totalWallets: wallets.length,
-    };
+    return Array.from(map.entries()).map(([currency, data]) => ({ currency, ...data }));
   }, [wallets]);
 
   // ── Loading state ──
@@ -179,21 +180,31 @@ export default function WalletCards() {
 
   return (
     <div className="space-y-6">
-      {/* ── Summary Stats ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="cyber-panel p-4 border border-[rgba(0,255,65,0.15)]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[rgba(0,255,65,0.1)]">
-              <CircleDollarSign className="w-5 h-5 text-[#00FF41]" />
+      {/* ── Per-Currency Summary Stats ──────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {currencySummary.map(({ currency, totalAvailable, walletCount }) => {
+          const flag = CURRENCY_FLAGS[currency] ?? '🌐';
+          return (
+            <div key={currency} className="cyber-panel p-4 border border-[rgba(0,255,65,0.15)]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-[rgba(0,255,65,0.1)]">
+                  <CircleDollarSign className="w-5 h-5 text-[#00FF41]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-[#555566] uppercase tracking-wider">
+                    <span className="mr-1">{flag}</span>Disponível ({currency})
+                  </p>
+                  <p className="text-xl font-bold text-[#00FF41] neon-glow-green cyber-mono">
+                    {formatCurrency(totalAvailable, currency)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-[#555566] cyber-mono">{walletCount} carteira(s)</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-[#555566] uppercase tracking-wider">Total Disponível</p>
-              <p className="text-xl font-bold text-[#00FF41] neon-glow-green cyber-mono">
-                {formatCurrency(summary.totalAvailable, 'EUR')}
-              </p>
-            </div>
-          </div>
-        </div>
+          );
+        })}
         <div className="cyber-panel p-4 border border-[rgba(0,240,255,0.15)]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[rgba(0,240,255,0.1)]">
@@ -202,7 +213,7 @@ export default function WalletCards() {
             <div>
               <p className="text-xs text-[#555566] uppercase tracking-wider">Total Carteiras</p>
               <p className="text-xl font-bold text-[#00F0FF] neon-glow-cyan cyber-mono">
-                {summary.totalWallets}
+                {wallets?.length ?? 0}
               </p>
             </div>
           </div>

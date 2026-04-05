@@ -26,8 +26,12 @@ export function isMerchant(user: AuthUser | null): boolean {
   return user?.role === 'merchant';
 }
 
+export function isCustomer(user: AuthUser | null): boolean {
+  return user?.role === 'customer';
+}
+
 export function getUserRole(user: AuthUser | null): UserRole {
-  return user?.role ?? 'merchant';
+  return user?.role ?? 'customer';
 }
 
 export const useAuthStore = create<AuthStore>()(
