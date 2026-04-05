@@ -136,3 +136,37 @@ Stage Summary:
 - Dev server running clean on localhost:3000
 - GitHub: https://github.com/nexflowx-hub/NeXFlowX-Fintech
 - Commits: 8ff8cae, 163c263
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix UI mock data, restore Developer Hub, align settings routes with OpenAPI v5.3.1-dev
+
+Work Log:
+- Analyzed all 12+ component files to understand current state
+- Fixed Swap widget: removed hardcoded CURRENCIES array, now reads currency_code from useWallets() dynamically
+- Fixed Payout widget: same dynamic currency population from wallet data
+- Fixed Deposit widget: same dynamic currency population from wallet data
+- Used derived state pattern (useState<string|null> + ?? fallback) to avoid lint errors with setState in effects
+- Rewrote Developer Hub (api-management.tsx) from ~764 lines to ~900+ lines with:
+  - Professional merchant-focused Quick Start guide (5-step integration)
+  - Payment Links integration documentation with curl examples
+  - Webhook HMAC-SHA256 signature verification (Node.js code example)
+  - Complete API Reference tab with all endpoints (Auth, Wallets, Payment Links, Swap, Payout, Ledger, Error Codes)
+  - 4 tabs: Quick Start, API Keys, Webhooks, API Reference
+  - Customer upsell lock screen with blurred previews and CTA
+- Fixed Settings routes:
+  - Password: PATCH /settings/password → POST /users/me/password
+  - Email: PATCH /settings/email → PATCH /users/me { email: "..." }
+  - Notifications: now functional with live toggles via PATCH /users/me
+  - Added route indicators (colored badges showing HTTP method + endpoint)
+- Updated client.ts: settings.changePassword now POST /users/me/password
+- Updated contracts.ts: UpdateUserMeRequest expanded with email + notification fields
+- All lint checks pass cleanly
+- Pushed to GitHub: dcb2d4f → nexflowx-hub/NeXFlowX-Fintech.git (main)
+
+Stage Summary:
+- 7 files modified, 865 insertions, 263 deletions
+- Zero lint errors
+- All forms now dynamically populated from user's actual wallet currencies
+- Developer Hub is merchant-grade with payment integration focus
+- Settings forms point to correct OpenAPI v5.3.1-dev routes
